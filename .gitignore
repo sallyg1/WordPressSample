@@ -1,0 +1,20 @@
+# WordPress config and secrets
+wp-config.php
+
+# User-generated content
+wp-content/uploads/
+
+# Cache and runtime artifacts
+wp-content/cache/
+wp-content/upgrade/
+wp-content/advanced-cache.php
+
+# Dependency/build folders
+node_modules/
+vendor/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
