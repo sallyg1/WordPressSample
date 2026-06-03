@@ -16,10 +16,25 @@ final class Pima_Voter_Record_Lookup_Plugin
     private const TIMEOUT = 20;
     private const NONCE_ACTION = 'pima_voter_record_lookup_action';
     private const NONCE_NAME = 'pima_voter_record_lookup_nonce';
+    private const SESSION_VOTER_ID_KEY = 'pima_voter_id';
+    private const PAGE2_SLUG = 'voterdashboard';
 
     public function __construct()
     {
+        add_action('init', [$this, 'ensure_session'], 1);
         add_shortcode('pima_voter_record_lookup_form', [$this, 'render_shortcode']);
+        add_shortcode('pima_voter_session_voter_id', [$this, 'render_session_voter_id']);
+    }
+
+    public function ensure_session(): void
+    {
+        if (session_status() !== PHP_SESSION_NONE) {
+            return;
+        }
+
+        if (!headers_sent()) {
+            session_start();
+        }
     }
 
     public function render_shortcode(): string
@@ -81,7 +96,53 @@ final class Pima_Voter_Record_Lookup_Plugin
             return '<p style="color:red;">Received invalid data from the API.</p>';
         }
 
-        return $this->render_results($data['item1']);
+        $record = $data['item1'];
+
+        $is_confidential = !empty($record['is_Confidential']);
+        if ($is_confidential) {
+            return '<p style="color:red;font-weight:bold;">Your records are sealed.</p>';
+        }
+
+        $voter_id_from_api = isset($record['voter_Id']) ? (int) $record['voter_Id'] : 0;
+        $is_valid = false;
+
+        if (array_key_exists('isValid', $record)) {
+            $is_valid = filter_var($record['isValid'], FILTER_VALIDATE_BOOLEAN);
+        } else {
+            $is_valid = $voter_id_from_api > 0;
+        }
+
+        if ($is_valid) {
+            $_SESSION[self::SESSION_VOTER_ID_KEY] = (string) $voter_id_from_api;
+            return $this->redirect_to_page2();
+        }
+
+        return '<p style="color:red;">Invalid information. Please try again.</p>';
+    }
+
+    private function redirect_to_page2(): string
+    {
+        $page = get_page_by_path(self::PAGE2_SLUG);
+        $url = $page instanceof WP_Post ? get_permalink($page) : home_url('/' . self::PAGE2_SLUG . '/');
+
+        if (is_string($url) && $url !== '') {
+            return '<script>window.location.href=' . wp_json_encode($url) . ';</script>'
+                . '<noscript><p><a href="' . esc_url($url) . '">Continue</a></p></noscript>';
+        }
+
+        return '<p style="color:red;">Could not determine redirect page URL.</p>';
+    }
+
+    public function render_session_voter_id(): string
+    {
+        $this->ensure_session();
+
+        $session_voter_id = $_SESSION[self::SESSION_VOTER_ID_KEY] ?? '';
+        if ($session_voter_id === '') {
+            return '<p>No voter ID found in session.</p>';
+        }
+
+        return '<p><strong>Voter ID:</strong> ' . esc_html((string) $session_voter_id) . '</p>';
     }
 
     private function render_results(array $record): string
