@@ -55,13 +55,21 @@ final class Pima_Voter_Info_API_Plugin
         $az_id      = isset($_POST['azId'])       ? sanitize_text_field(wp_unslash($_POST['azId']))       : '';
         $ssn        = isset($_POST['ssn'])        ? sanitize_text_field(wp_unslash($_POST['ssn']))        : '';
 
-        if ($first_name === '' || $last_name === '' || $dob === '' || $az_id === '' || $ssn === '') {
-            return '<p style="color:red;">All fields are required.</p>';
+        if ($first_name === '' || $last_name === '' || $dob === '') {
+            return '<p style="color:red;">First name, last name, and date of birth are required.</p>';
+        }
+
+        if ($az_id === '' && $ssn === '') {
+            return '<p style="color:red;">Please enter either an Arizona Voter ID or the last 4 digits of your SSN.</p>';
         }
 
         // Validate DOB format (YYYY-MM-DD)
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dob)) {
             return '<p style="color:red;">Date of birth must be in YYYY-MM-DD format.</p>';
+        }
+
+        if ($ssn !== '' && !preg_match('/^\d{4}$/', $ssn)) {
+            return '<p style="color:red;">SSN must be exactly 4 digits.</p>';
         }
 
         $url = add_query_arg(
@@ -205,15 +213,18 @@ final class Pima_Voter_Info_API_Plugin
                 <input type="date" id="dob" name="dob" required
                        style="width:100%;padding:6px;box-sizing:border-box;" />
             </p>
+            <p style="margin:1rem 0 0.5rem;font-style:italic;">
+                Enter <strong>either</strong> your Arizona Voter ID <strong>or</strong> the last 4 digits of your SSN.
+            </p>
             <p>
                 <label for="azId"><strong>Arizona Voter ID:</strong></label><br />
-                <input type="text" id="azId" name="azId" required
+                <input type="text" id="azId" name="azId"
                        placeholder="e.g. D05043049"
                        style="width:100%;padding:6px;box-sizing:border-box;" />
             </p>
             <p>
                 <label for="ssn"><strong>SSN (last 4 digits):</strong></label><br />
-                <input type="password" id="ssn" name="ssn" required
+                <input type="password" id="ssn" name="ssn"
                        maxlength="4" pattern="\d{4}" placeholder="••••"
                        style="width:100%;padding:6px;box-sizing:border-box;" />
             </p>
