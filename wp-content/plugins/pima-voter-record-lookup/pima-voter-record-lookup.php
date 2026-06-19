@@ -17,7 +17,7 @@ final class Pima_Voter_Record_Lookup_Plugin
     private const NONCE_ACTION = 'pima_voter_record_lookup_action';
     private const NONCE_NAME = 'pima_voter_record_lookup_nonce';
     private const SESSION_VOTER_ID_KEY = 'pima_voter_id';
-    private const PAGE2_SLUG = 'voterdashboard';
+    private const PAGE2_SLUG = 'voterdashboardv2';
 
     public function __construct()
     {
