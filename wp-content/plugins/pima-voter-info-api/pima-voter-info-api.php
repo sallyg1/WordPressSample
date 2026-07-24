@@ -229,12 +229,62 @@ final class Pima_Voter_Info_API_Plugin
                        style="width:100%;padding:6px;box-sizing:border-box;" />
             </p>
             <p>
-                <button type="submit" name="pima_voter_info_submit" value="1"
+                <button type="button" id="pima-open-modal-btn"
                         style="padding:8px 20px;cursor:pointer;">
                     Validate Voter
                 </button>
             </p>
+
+            <!-- Hidden submit button for form submission -->
+            <button type="submit" name="pima_voter_info_submit" value="1"
+                    id="pima-hidden-submit" style="display:none;"></button>
         </form>
+
+        <!-- Modal Popup -->
+        <div id="pima-modal-overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center;">
+            <div style="background:#fff;border-radius:8px;padding:2rem;max-width:400px;width:90%;box-shadow:0 4px 20px rgba(0,0,0,0.3);text-align:center;">
+                <p style="margin:0 0 1.5rem;font-size:1.1rem;">Testing</p>
+                <div style="display:flex;gap:1rem;justify-content:center;">
+                    <button type="button" id="pima-modal-cancel"
+                            style="padding:8px 20px;cursor:pointer;background:#ccc;border:1px solid #999;border-radius:4px;">
+                        Cancel
+                    </button>
+                    <button type="button" id="pima-modal-process"
+                            style="padding:8px 20px;cursor:pointer;background:#0073aa;color:#fff;border:none;border-radius:4px;font-weight:600;">
+                        Process
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <script>
+        (function() {
+            var overlay = document.getElementById('pima-modal-overlay');
+            var openBtn = document.getElementById('pima-open-modal-btn');
+            var cancelBtn = document.getElementById('pima-modal-cancel');
+            var processBtn = document.getElementById('pima-modal-process');
+            var hiddenSubmit = document.getElementById('pima-hidden-submit');
+
+            openBtn.addEventListener('click', function() {
+                overlay.style.display = 'flex';
+            });
+
+            cancelBtn.addEventListener('click', function() {
+                overlay.style.display = 'none';
+            });
+
+            processBtn.addEventListener('click', function() {
+                overlay.style.display = 'none';
+                hiddenSubmit.click();
+            });
+
+            overlay.addEventListener('click', function(e) {
+                if (e.target === overlay) {
+                    overlay.style.display = 'none';
+                }
+            });
+        })();
+        </script>
         <?php
         return ob_get_clean();
     }
