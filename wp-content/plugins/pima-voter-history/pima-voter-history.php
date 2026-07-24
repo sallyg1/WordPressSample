@@ -28,9 +28,8 @@ final class Pima_Voter_History_Plugin
 
     public function render_shortcode(): string
     {
-        $voter_id = isset($_GET['voter_id'])
-            ? preg_replace('/\D+/', '', (string) $_GET['voter_id'])
-            : '';
+        $raw = $_GET['voter_id'] ?? $_GET['voterId'] ?? '';
+        $voter_id = preg_replace('/\D+/', '', (string) $raw);
 
         if ($voter_id === '') {
             return '<p>No voter ID found in session.</p>';
@@ -110,9 +109,10 @@ final class Pima_Voter_History_Plugin
         }
 
         $base_url = remove_query_arg('vhpage');
-        $voter_id = isset($_GET['voter_id']) ? preg_replace('/\D+/', '', (string) $_GET['voter_id']) : '';
+        $raw = $_GET['voter_id'] ?? $_GET['voterId'] ?? '';
+        $voter_id = preg_replace('/\D+/', '', (string) $raw);
         if ($voter_id !== '') {
-            $base_url = add_query_arg('voter_id', $voter_id, $base_url);
+            $base_url = add_query_arg('voterId', $voter_id, $base_url);
         }
         $links    = '';
 
