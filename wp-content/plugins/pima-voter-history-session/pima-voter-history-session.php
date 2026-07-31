@@ -19,15 +19,7 @@ final class Pima_Voter_History_Session_Plugin
 
     public function __construct()
     {
-        add_action('init', [$this, 'start_session']);
         add_shortcode(self::SHORTCODE, [$this, 'render_shortcode']);
-    }
-
-    public function start_session(): void
-    {
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
-        }
     }
 
     /* ------------------------------------------------------------------ */
@@ -36,10 +28,15 @@ final class Pima_Voter_History_Session_Plugin
 
     public function render_shortcode(): string
     {
-        $raw = $_SESSION['voter_id'] ?? '';
-        $voter_id = preg_replace('/\D+/', '', (string) $raw);
+        $voter_id = class_exists('Voter_Dashboard_Login_Plugin')
+            ? Voter_Dashboard_Login_Plugin::get_voter_id_from_token()
+            : false;
 
-        if ($voter_id === '') {
+        if ($voter_id !== false) {
+            $voter_id = (string) $voter_id;
+        }
+
+        if ($voter_id === false || $voter_id === '' || $voter_id === '0') {
             return '<p>No voter ID found in session.</p>';
         }
 

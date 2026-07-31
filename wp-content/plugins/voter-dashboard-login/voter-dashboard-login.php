@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Voter Dashboard Login
  * Description: Validates voter information and redirects to the voter dashboard page.
- * Version: 1.4.0
+ * Version: 1.5.0
  * Author: My Ton
  */
 
@@ -16,24 +16,52 @@ final class Voter_Dashboard_Login_Plugin
     private const TIMEOUT     = 20;
     private const NONCE_ACTION = 'voter_dashboard_login_action';
     private const NONCE_NAME   = 'voter_dashboard_login_nonce';
-    private const SESSION_VOTER_ID_KEY = 'voter_id';
-    private const PAGE2_SLUG = 'voter-dashboard-info-elec';
+    private const COOKIE_NAME  = 'pima_voter_token';
+    private const TRANSIENT_PREFIX = 'pima_voter_';
+    private const TOKEN_TTL    = 1800; // 30 minutes
+    private const PAGE2_SLUG   = 'voter-dashboard-info-elec';
 
     public function __construct()
     {
-        add_action('init', [$this, 'ensure_session'], 10);
         add_shortcode('voter_dashboard_login_form', [$this, 'render_shortcode']);
         add_shortcode('voter_session_voter_id', [$this, 'render_session_voter_id']);
     }
 
-    public function ensure_session(): void
+    /**
+     * Store voter ID in a WordPress transient and set a secure cookie with the lookup token.
+     */
+    private function store_voter_token(int $voter_id): void
     {
-        if (session_status() !== PHP_SESSION_NONE) {
-            return;
+        $token = wp_generate_password(32, false);
+        set_transient(self::TRANSIENT_PREFIX . $token, $voter_id, self::TOKEN_TTL);
+
+        setcookie(self::COOKIE_NAME, $token, [
+            'expires'  => time() + self::TOKEN_TTL,
+            'path'     => '/',
+            'secure'   => is_ssl(),
+            'httponly'  => true,
+            'samesite' => 'Strict',
+        ]);
+    }
+
+    /**
+     * Retrieve voter ID from transient via the cookie token.
+     *
+     * @return int|false  Voter ID on success, false if expired/missing.
+     */
+    public static function get_voter_id_from_token()
+    {
+        $token = isset($_COOKIE[self::COOKIE_NAME])
+            ? sanitize_text_field(wp_unslash($_COOKIE[self::COOKIE_NAME]))
+            : '';
+
+        if ($token === '') {
+            return false;
         }
-        if (!headers_sent()) {
-            session_start();
-        }
+
+        $voter_id = get_transient(self::TRANSIENT_PREFIX . $token);
+
+        return $voter_id !== false ? (int) $voter_id : false;
     }
 
     public function render_shortcode(): string
@@ -140,7 +168,7 @@ final class Voter_Dashboard_Login_Plugin
             : $voter_id > 0;
 
         if ($is_valid) {
-            $_SESSION[self::SESSION_VOTER_ID_KEY] = (string) $voter_id;
+            $this->store_voter_token($voter_id);
             return $this->redirect_to_page2();
         }
 
@@ -165,14 +193,13 @@ final class Voter_Dashboard_Login_Plugin
 
     public function render_session_voter_id(): string
     {
-        $this->ensure_session();
+        $voter_id = self::get_voter_id_from_token();
 
-        $session_voter_id = $_SESSION[self::SESSION_VOTER_ID_KEY] ?? '';
-        if ($session_voter_id === '') {
+        if ($voter_id === false) {
             return '<p>No voter ID found in session.</p>';
         }
 
-        return '<p><strong>Voter ID:</strong> ' . esc_html((string) $session_voter_id) . '</p>';
+        return '<p><strong>Voter ID:</strong> ' . esc_html((string) $voter_id) . '</p>';
     }
 
     private function render_form(): string
