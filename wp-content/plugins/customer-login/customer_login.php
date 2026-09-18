@@ -1,8 +1,9 @@
 <?php
+
 /**
  * Plugin Name: Voter Dashboard Login
  * Description: Validates voter information and redirects to the voter dashboard page.
- * Version: 1.6.0
+ * Version: 1.5.0
  * Author: My Ton
  */
 
@@ -18,19 +19,75 @@ final class Voter_Dashboard_Login_Plugin
     private const NONCE_NAME   = 'voter_dashboard_login_nonce';
     private const COOKIE_NAME  = 'pima_voter_token';
     private const TRANSIENT_PREFIX = 'pima_voter_';
-    private const TOKEN_TTL    = 1800; // 30 minutes
-    private const PAGE2_SLUG   = 'voter-dashboard-info-elec';
-    private const LOGIN_SLUG = 'voter-dashboard-login';
+    private const TOKEN_TTL    = 60; // 30 minutes
+    private const PAGE2_SLUG = 'voter-dashboard-info-elec';
+    private const LOGIN_SLUG  = 'voter_dashboard_login';
+    private const LOGOUT_ACTION = 'voter_dashboard_logout_action';
     private string $login_error = '';
 
     public function __construct()
     {
         add_shortcode('voter_dashboard_login_form', [$this, 'render_shortcode']);
         add_shortcode('voter_session_voter_id', [$this, 'render_session_voter_id']);
+        add_action('init', [$this, 'handle_logout']);
+        add_action('wp_body_open', [$this, 'auto_render_header']);
         add_action('template_redirect', [$this, 'prepare_page']);
         add_action('wp_enqueue_scripts', [$this, 'enqueue_session_script']);
         add_action('wp_ajax_pima_voter_session', [$this, 'handle_session']);
         add_action('wp_ajax_nopriv_pima_voter_session', [$this, 'handle_session']);
+    }
+
+    /**
+     * Handle logout: clear transient + cookie, redirect to login page.
+     */
+    public function handle_logout(): void
+    {
+        if (!isset($_GET['voter_logout']) || $_GET['voter_logout'] !== '1') {
+            return;
+        }
+
+        if (
+            !isset($_GET['_wpnonce']) ||
+            !wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), self::LOGOUT_ACTION)
+        ) {
+            return;
+        }
+
+        $token = self::token();
+        if ($token !== '') {
+            delete_transient(self::TRANSIENT_PREFIX . $token);
+        }
+        self::cookie('', time() - 3600);
+
+        wp_safe_redirect(self::login_url());
+        exit;
+    }
+
+    /**
+     * Automatically render the header bar on all pages (via wp_body_open hook).
+     * Skips the login page. Only shows when voter is logged in.
+     */
+    public function auto_render_header(): void
+    {
+        global $post;
+        if ($post instanceof WP_Post && $post->post_name === self::LOGIN_SLUG) {
+            return;
+        }
+
+        $voter_id = self::get_voter_id_from_token();
+        if ($voter_id === false) {
+            return;
+        }
+
+        $logout_url = wp_nonce_url(
+            add_query_arg('voter_logout', '1', home_url($_SERVER['REQUEST_URI'])),
+            self::LOGOUT_ACTION
+        );
+
+        echo '<div style="background:#0073aa;color:#fff;padding:10px 20px;display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">' .
+            '<span style="font-weight:600;">Voter Dashboard</span>' .
+            '<a href="' . esc_url($logout_url) . '" style="background:#fff;color:#0073aa;padding:6px 16px;border-radius:4px;text-decoration:none;font-weight:600;font-size:0.9rem;">Logout</a>' .
+            '</div>';
     }
 
     private static function idle_seconds(): int
@@ -65,7 +122,10 @@ final class Voter_Dashboard_Login_Plugin
 
     private static function login_url(): string
     {
-        return home_url('/' . self::LOGIN_SLUG . '/');
+        $login_page = get_page_by_path(self::LOGIN_SLUG);
+        return $login_page instanceof WP_Post
+            ? get_permalink($login_page)
+            : home_url('/' . self::LOGIN_SLUG . '/');
     }
 
     public function prepare_page(): void
@@ -96,7 +156,7 @@ final class Voter_Dashboard_Login_Plugin
         if ($session === false) {
             return;
         }
-        wp_enqueue_script('pima-voter-session', plugins_url('session.js', __FILE__), [], '1.6.0', false);
+        wp_enqueue_script('pima-voter-session', plugins_url('session.js', __FILE__), [], '1.5.0', false);
         wp_add_inline_script('pima-voter-session', 'window.pimaVoterSession = ' . wp_json_encode([
             'ajaxUrl' => admin_url('admin-ajax.php'), 'loginUrl' => self::login_url(),
             'csrf' => $session['csrf'],
@@ -112,8 +172,7 @@ final class Voter_Dashboard_Login_Plugin
             wp_send_json_error(null, 405);
         }
         $token = self::token();
-        $lock = 'pima_' . hash('sha256', $token);
-        $lock = substr($lock, 0, 64);
+        $lock = substr('pima_' . hash('sha256', $token), 0, 64);
         if ($token === '') {
             wp_send_json_error(null, 401);
         }
@@ -221,7 +280,7 @@ final class Voter_Dashboard_Login_Plugin
         $dob_valid = DateTime::createFromFormat('Y-m-d', $dob);
         $errors = DateTime::getLastErrors();
         if ($dob_valid === false || ($errors !== false && ($errors['warning_count'] > 0 || $errors['error_count'] > 0))) {
-            return '<p style="color:red;">Date of birth must be in YYYY-MM-DD format.</p>';
+             return '<p style="color:red;">Date of birth must be in YYYY-MM-DD format.</p>';
         }
 
         $url = add_query_arg(
@@ -235,7 +294,7 @@ final class Voter_Dashboard_Login_Plugin
             self::API_URL
         );
 
-        $response = wp_remote_get($url, [
+       $response = wp_remote_get($url, [
             'timeout' => self::TIMEOUT,
             'headers' => [
                 'Accept' => 'text/plain',
@@ -264,12 +323,12 @@ final class Voter_Dashboard_Login_Plugin
     private function render_results(array $data): string
     {
         if (!isset($data['item1']['voterInfo']) || !is_array($data['item1']['voterInfo'])) {
-            return '<p style="color:red;">Invalid API structure.</p>';
+              return '<p style="color:red;">Invalid API structure.</p>';
         }
 
         $voter_info = $data['item1']['voterInfo'] ?? [];
 
-        $voter_id     = (int) ($voter_info['returnVoterId'] ?? 0);
+        $voter_id     = (int)($voter_info['returnVoterId'] ?? 0);
         $confidential = !empty($voter_info['isConfidential']);
 
         if ($confidential) {
@@ -352,10 +411,8 @@ final class Voter_Dashboard_Login_Plugin
                     find Voter
                 </button>
             </p>
-            <!-- Hidden input to flag form submission -->
             <input type="hidden" name="voter_dashboard_login_submit" value="1" />
         </form>
-
         <!-- Modal Popup -->
         <div id="pima-modal-overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center;">
             <div style="background:#fff;border-radius:8px;padding:2rem;max-width:400px;width:90%;box-shadow:0 4px 20px rgba(0,0,0,0.3);text-align:center;">
